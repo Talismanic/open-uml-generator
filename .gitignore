@@ -13,6 +13,7 @@ venv/
 .ipynb_checkpoints/
 
 # Auto-generated diagrams
+/uml-generator/
 backend/diagrams/
 backend/temp_uml.txt
 *.puml
