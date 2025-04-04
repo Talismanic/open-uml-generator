@@ -1,0 +1,11 @@
+autogen-agentchat
+autogen-ext[openai]
+python-dotenv  # Optional, for managing API keys
+elevenlabs
+requests
+plantuml
+fastapi
+uvicorn
+autogen-core
+aiofiles
+

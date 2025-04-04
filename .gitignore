@@ -1,0 +1,52 @@
+# === PYTHON BACKEND ===
+__pycache__/
+*.py[cod]
+*.log
+*.env
+.env.*
+.venv/
+venv/
+*.sqlite3
+*.db
+
+# Jupyter notebooks and output
+.ipynb_checkpoints/
+
+# Auto-generated diagrams
+backend/diagrams/
+backend/temp_uml.txt
+*.puml
+*.png
+*.svg
+
+# === FRONTEND (React) ===
+frontend/node_modules/
+frontend/build/
+frontend/.env
+frontend/.env.*
+
+# npm debug log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# === OS / MISC ===
+.DS_Store
+Thumbs.db
+
+# === IDE / TOOLING ===
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# === PYTEST / TEST OUTPUT ===
+htmlcov/
+.coverage
+coverage.xml
+pytest_cache/
+
+# === ENVIRONMENT MANAGEMENT ===
+poetry.lock
+Pipfile.lock
+*.egg-info/
