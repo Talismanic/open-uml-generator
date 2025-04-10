@@ -3,8 +3,10 @@ import './App.css';
 
 
 const App = () => {
-    const [requirement, setRequirement] = useState("");
+    const [mode, setMode] = useState(2); // default mode 2
     const [diagramUrl, setDiagramUrl] = useState(null);
+    const [diagramUrls, setDiagramUrls] = useState([]);
+    const [requirement, setRequirement] = useState("");
     const [showModal, setShowModal] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -19,18 +21,29 @@ const App = () => {
         setLoading(true);
         setError(null);
         setShowModal(false);
+        setDiagramUrls([]);
 
         try {
             const response = await fetch("http://localhost:8000/generate", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ requirement })
+                body: JSON.stringify({ requirement, mode })
             });
 
             if (!response.ok) throw new Error("Server error");
 
             const data = await response.json();
-            setDiagramUrl(`http://localhost:8000${data.diagram_url}`);
+            if (mode === 1 && data.diagram_url?.diagram_url) {
+                setDiagramUrl([`http://localhost:8000${data.diagram_url.diagram_url}`]);
+            } else if (mode === 2 && data.diagram_url?.base_diagram_url && data.diagram_url?.enhanced_diagram_url) {
+                setDiagramUrls([
+                    `http://localhost:8000${data.diagram_url.base_diagram_url}`,
+                    `http://localhost:8000${data.diagram_url.enhanced_diagram_url}`
+                ]);
+            } else {
+                throw new Error("Unexpected response structure.");
+            }
+    
             setShowModal(true);
         } catch (err) {
             setError("Failed to generate UML diagram.");
@@ -51,6 +64,16 @@ const App = () => {
 
             <h2 style={styles.heading}>UML Diagram Generator</h2>
 
+            <label style={styles.label}>Select Mode:</label>
+                <select
+                    value={mode}
+                    onChange={(e) => setMode(Number(e.target.value))}
+                    style={{ ...styles.textarea, height: "40px" }}
+                >
+                    <option value={1}>Mode 1 (Base Diagram Only)</option>
+                    <option value={2}>Mode 2 (Base + Enhanced)</option>
+                </select>
+
             <label style={styles.label}>Software Requirement:</label>
             <textarea
                 value={requirement}
@@ -66,20 +89,45 @@ const App = () => {
             {showModal && (
                 <div style={styles.modalOverlay}>
                     <div style={styles.modal}>
-                        <h3>{error ? "Error" : "Generated UML Diagram"}</h3>
+                        <h3>{error ? "Error" : "Generated UML Diagram(s)"}</h3>
                         {error ? (
                             <p>{error}</p>
                         ) : (
-                            <img
-                                src={diagramUrl}
-                                alt="UML Diagram"
-                                style={{ maxWidth: "100%", maxHeight: "500px", border: "1px solid #ccc" }}
-                            />
+                            <>
+                                {mode === 1 && (
+                                    <img
+                                        src={diagramUrl}
+                                        alt="Base UML Diagram"
+                                        style={{ maxWidth: "100%", maxHeight: "500px", border: "1px solid #ccc" }}
+                                    />
+                                )}
+                                {mode === 2 && (
+                                    <div>
+                                        <div style={{ marginBottom: "20px" }}>
+                                            <strong>Base Diagram:</strong>
+                                            <img
+                                                src={diagramUrls[0]}
+                                                alt="Base Diagram"
+                                                style={{ maxWidth: "100%", maxHeight: "500px", border: "1px solid #ccc" }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <strong>Enhanced Diagram:</strong>
+                                            <img
+                                                src={diagramUrls[1]}
+                                                alt="Enhanced Diagram"
+                                                style={{ maxWidth: "100%", maxHeight: "500px", border: "1px solid #ccc" }}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                            </>
                         )}
                         <button style={styles.closeButton} onClick={() => setShowModal(false)}>Close</button>
                     </div>
                 </div>
             )}
+
         </div>
     );
 };

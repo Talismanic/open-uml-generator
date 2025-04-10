@@ -1,5 +1,6 @@
 import asyncio
 from dataclasses import dataclass
+import time
 from typing import List
 from dotenv import load_dotenv
 import json
@@ -53,14 +54,37 @@ class UmlGeneratorAgent(RoutedAgent):
 
     @message_handler
     async def handle_user_description(self, message: Message, ctx: MessageContext) -> None:
+        payload = json.loads(message.content)
+        requirement = payload["requirement"]
+        mode = payload.get("mode", 2)
         prompt = f"Software requirement: {message.content}"
         llm_result = await self._model_client.create(
             messages=[self._system_message, UserMessage(content=prompt, source=self.id.key)],
             cancellation_token=ctx.cancellation_token,
         )
-        response = llm_result.content
-        print(f"{'-'*80}\n{self.id.type}:\n{response}")
-        await self.publish_message(Message(response), topic_id=TopicId(uml_critic_topic_type, source=self.id.key))
+        uml_code = llm_result.content
+        print(f"{'-'*80}\n{self.id.type}:\n{uml_code}")
+        
+        if mode == 2:
+            await self.publish_message(
+                Message(content=json.dumps({
+                    "base_diagram": uml_code,
+                    "mode": mode
+                    })),
+                    topic_id=TopicId(uml_critic_topic_type, source=self.id.key)
+                    )
+
+            
+        else:
+            publishable_payload = json.dumps({
+            "diagrams": [uml_code],
+            "mode": mode
+        })
+            await self.publish_message(
+                Message(content=publishable_payload),
+                topic_id=TopicId(uml_renderer_topic_type, source=self.id.key)
+            )
+       
 
 
 # Agent 02: UmlCriticAgent
@@ -79,14 +103,21 @@ class UmlCriticAgent(RoutedAgent):
 
     @message_handler
     async def handle_intermediate_text(self, message: Message, ctx: MessageContext) -> None:
-        prompt = f"Draft copy:\n{message.content}"
+        payload = json.loads(message.content)
+        base_diagram = payload["base_diagram"]
+        mode = payload.get("mode", 2)
+        prompt = f"Draft copy:\n{base_diagram}"
         llm_result = await self._model_client.create(
             messages=[self._system_message, UserMessage(content=prompt, source=self.id.key)],
             cancellation_token=ctx.cancellation_token,
         )
-        response = llm_result.content
-        print(f"{'-'*80}\n{self.id.type}:\n{response}")
-        await self.publish_message(Message(response), topic_id=TopicId(uml_renderer_topic_type, source=self.id.key))
+        enhanced_diagram = llm_result.content
+        print(f"{'-'*80}\n{self.id.type}:\n{enhanced_diagram}")
+        publishable_payload = json.dumps({
+            "diagrams": [base_diagram, enhanced_diagram],
+            "mode": mode
+        })
+        await self.publish_message(Message(content=publishable_payload), topic_id=TopicId(uml_renderer_topic_type, source=self.id.key))
 
 
 # Agent 03: UmlRendererAgent
@@ -100,33 +131,48 @@ class UmlRendererAgent(RoutedAgent):
 
     @message_handler
     async def handle_user_message(self, message: Message, ctx: MessageContext) -> Message:
-        print(f"UmlRendererAgent received: {message.content}")
-        session = self._system_messages + [UserMessage(content=message.content, source="user")]
+        payload = json.loads(message.content)
+        diagrams = payload["diagrams"]
+        mode = payload.get("mode", 2)
+        print(f"UmlRendererAgent received {len(diagrams)} diagrams with mode = {mode}")
 
-        create_result = await self._model_client.create(
-            messages=session,
-            tools=self._tools,
-            cancellation_token=ctx.cancellation_token,
-        )
+        all_results = []
 
-        if isinstance(create_result.content, str):
-            return Message(content=create_result.content)
+        for idx, diagram in enumerate(diagrams):
+            file_tag = "base" if idx == 0 else "enhanced"
+            timestamp = str(int(time.time()))
+            file_name = f"{file_tag}_{timestamp}.png"
+            print(f"Rendering {file_tag} diagram to file: {file_name}")
+            session = self._system_messages + [UserMessage(content=diagram, source="user")]
+            create_result = await self._model_client.create(
+                messages=session,
+                tools=self._tools,
+                cancellation_token=ctx.cancellation_token,
+            )
+            if isinstance(create_result.content, str):
+                all_results.append(Message(content=create_result.content))
+                continue
+            session.append(AssistantMessage(content=create_result.content, source="assistant"))
+            tool_results = await asyncio.gather(
+                *[self._execute_tool_call(call, ctx.cancellation_token, file_name) for call in create_result.content]
+            )
+            session.append(FunctionExecutionResultMessage(content=tool_results))
 
-        session.append(AssistantMessage(content=create_result.content, source="assistant"))
-        results = await asyncio.gather(
-            *[self._execute_tool_call(call, ctx.cancellation_token) for call in create_result.content]
-        )
+            final_response = await self._model_client.create(
+                messages=session,
+                cancellation_token=ctx.cancellation_token,
+            )
+            if isinstance(final_response.content, str):
+                all_results.append(Message(content=final_response.content))
+        
+        combined_diagram = "\n\n".join([msg.content for msg in all_results])
 
-        session.append(FunctionExecutionResultMessage(content=results))
+        return Message(content=json.dumps({
+        "diagram_urls": [f"/diagrams/uml_{i}.puml" for i in range(len(all_results))],
+        "combined_diagram": combined_diagram
+    }))
 
-        create_result = await self._model_client.create(
-            messages=session,
-            cancellation_token=ctx.cancellation_token,
-        )
-        assert isinstance(create_result.content, str)
-        return Message(content=create_result.content)
-
-    async def _execute_tool_call(self, call: FunctionCall, cancellation_token: CancellationToken) -> FunctionExecutionResult:
+    async def _execute_tool_call(self, call: FunctionCall, cancellation_token: CancellationToken, file_name: str) -> FunctionExecutionResult:
         print(f"Executing tool: {call.name} with arguments: {call.arguments}")
         tool = next((tool for tool in self._tools if tool.name == call.name), None)
         if not tool:
@@ -139,6 +185,7 @@ class UmlRendererAgent(RoutedAgent):
 
         try:
             arguments = json.loads(call.arguments)
+            arguments["file_name"] = file_name
             result = await tool.run_json(arguments, cancellation_token)
 
             return FunctionExecutionResult(
@@ -154,4 +201,3 @@ class UmlRendererAgent(RoutedAgent):
                 is_error=True,
                 name=call.name
             )
-# NOTE: Do NOT include main() here — handled in uml_agent_runner.py

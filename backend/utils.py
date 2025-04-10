@@ -1,4 +1,5 @@
 import re
+import os
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 
 async def generate_filename_from_requirement(requirement: str, model_client=None) -> str:
@@ -33,3 +34,9 @@ async def generate_filename_from_requirement(requirement: str, model_client=None
     filename = filename.strip().lower()
     filename = re.sub(r'[^a-z0-9\-]', '', filename)  # Clean for file safety
     return filename
+
+def save_diagram(file_name: str, content: str):
+    os.makedirs("diagrams", exist_ok=True)
+    path = os.path.join("diagrams", file_name)
+    with open(path, "w") as f:
+        f.write(content)

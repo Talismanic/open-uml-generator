@@ -1,6 +1,9 @@
+import json
 import os
 from typing import List
+import time
 from tools import render_plantuml
+from utils import save_diagram
 
 from autogen_core import SingleThreadedAgentRuntime, TopicId
 from autogen_core.tools import Tool, FunctionTool
@@ -20,7 +23,7 @@ from autogen_logic import (
 
 
 # Main callable function for the backend
-async def generate_uml(requirement: str) -> str:
+async def generate_uml(requirement: str, mode: int = 2 ) -> str:
     model_client = OpenAIChatCompletionClient(model="gpt-4o-mini")
     runtime = SingleThreadedAgentRuntime()
 
@@ -43,9 +46,15 @@ async def generate_uml(requirement: str) -> str:
     # Start the message processing loop
     runtime.start()
 
+    payload = json.dumps({
+        "requirement": requirement,
+        "mode": mode,
+    })
+
+
     # Publish requirement to the generator agent
     await runtime.publish_message(
-        Message(content=requirement),
+        Message(content=payload),
         topic_id=TopicId(uml_generator_topic_type, source="web"),
     )
 
@@ -56,15 +65,24 @@ async def generate_uml(requirement: str) -> str:
     diagram_dir = "diagrams"
     if not os.path.exists(diagram_dir):
         return ""
-
+    
     files = sorted(
-        os.listdir(diagram_dir),
+        [f for f in os.listdir(diagram_dir) if f.endswith(".png")],
         key=lambda f: os.path.getctime(os.path.join(diagram_dir, f)),
         reverse=True
     )
-    if not files:
-        return ""
 
-    return f"/diagrams/{os.path.basename(files[0])}"
+    if mode == 1:
+        return {
+            "diagram_url": f"/diagrams/{files[0]}" if files else ""
+        }
+
+    if mode == 2 and len(files) >= 2:
+        return {
+            "base_diagram_url": f"/diagrams/{files[1]}",  # older
+            "enhanced_diagram_url": f"/diagrams/{files[0]}"  # newer
+        }
+
+    return {}
 
 
