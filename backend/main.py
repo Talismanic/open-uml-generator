@@ -23,6 +23,7 @@ class RequirementRequest(BaseModel):
     requirement: str
     mode: int = 2
 
+os.makedirs("diagrams", exist_ok=True)
 app.mount("/diagrams", StaticFiles(directory="diagrams"), name="diagrams")
 
 
