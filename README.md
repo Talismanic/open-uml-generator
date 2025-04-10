@@ -96,7 +96,7 @@ Frontend will open at [http://localhost:3000](http://localhost:3000)
 
 ## ✨ Usage Instructions
 
-1. Go to `http://localhost:3000`
+1. Go to `http://localhost:3003`
 2. Enter a software requirement (e.g., "A hospital management system")
 3. Click **Generate Diagram**
 4. A modal will appear showing the generated UML class diagram
