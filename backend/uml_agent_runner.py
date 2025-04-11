@@ -25,6 +25,7 @@ from autogen_logic import (
 # Main callable function for the backend
 async def generate_uml(requirement: str, mode: int = 2 ) -> str:
     model_client = OpenAIChatCompletionClient(model="gpt-4o-mini")
+    model_client_for_critique = OpenAIChatCompletionClient(model="gpt-4o-mini")
     runtime = SingleThreadedAgentRuntime()
 
 
@@ -36,7 +37,7 @@ async def generate_uml(requirement: str, mode: int = 2 ) -> str:
     )
 
     await UmlCriticAgent.register(
-        runtime, type=uml_critic_topic_type, factory=lambda: UmlCriticAgent(model_client)
+        runtime, type=uml_critic_topic_type, factory=lambda: UmlCriticAgent(model_client_for_critique)
     )
 
     await UmlRendererAgent.register(
