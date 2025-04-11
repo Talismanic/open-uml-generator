@@ -39,6 +39,7 @@ async def render_plantuml(uml_code: str, file_name: str) -> str:
     """
     output_dir = "diagrams"
     os.makedirs(output_dir, exist_ok=True)
+    # theme = "blueprint"
 
     output_file = os.path.join(output_dir, file_name)
     temp_file = os.path.join(output_dir, f"temp_{file_name}.txt")
@@ -46,6 +47,9 @@ async def render_plantuml(uml_code: str, file_name: str) -> str:
     uml_syntax = re.search(r'@startuml[\s\S]*?@enduml', uml_code)
     if uml_syntax:
         uml_code = uml_syntax.group()
+        # if theme:
+        #     # Insert theme directive after @startuml
+        #     uml_code = uml_code.replace('@startuml', f'@startuml\n!theme {theme}')
 
         with open(temp_file, "w") as f:
             f.write(uml_code)
